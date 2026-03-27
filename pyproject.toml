@@ -30,6 +30,11 @@ target-version = "py314"
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
 
+[project.optional-dependencies]
+quantize = [
+    "bitsandbytes>=0.43",
+]
+
 [dependency-groups]
 dev = [
     "ruff>=0.15.7",
