@@ -157,6 +157,7 @@ def run_bench(
         use_prefix_cache=False if no_prefix_cache else preset_cfg.get("use_prefix_cache", False),
         method_kwargs=method_kwargs,
         system_prompt=preset_cfg.get("system_prompt", ""),
+        load_in_4bit=preset_cfg.get("load_in_4bit", False),
     )
 
     runner = BenchmarkRunner(config)
