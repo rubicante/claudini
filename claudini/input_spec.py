@@ -6,6 +6,8 @@ Three orthogonal axes:
 - init: how to initialize optimizable tokens (random)
 """
 
+from __future__ import annotations
+
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field

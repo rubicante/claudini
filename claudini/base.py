@@ -2,6 +2,8 @@
 Core abstractions for claudini: TokenOptimizer, FlopCounter, RunResult.
 """
 
+from __future__ import annotations
+
 import gc
 import json
 import logging
