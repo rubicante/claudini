@@ -35,6 +35,9 @@ quantize = [
     "bitsandbytes>=0.43",
 ]
 
+[project.scripts]
+claudini-submit = "claudini.pipeline.submit:app"
+
 [dependency-groups]
 dev = [
     "ruff>=0.15.7",

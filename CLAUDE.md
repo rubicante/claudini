@@ -114,6 +114,58 @@ uv run ruff check --fix .
 
 Line length 120. Always run before committing.
 
+## Async pipeline
+
+Benchmarks run on a remote GPU machine. The pipeline uses GitHub Issues as a job queue so work can be submitted from anywhere, independent of whether the compute backend is currently running.
+
+### Required environment variables
+
+| Variable | Where | Purpose |
+|---|---|---|
+| `CLAUDINI_BACKEND` | local + remote | Which backend to use (`runpod`) |
+| `RUNPOD_API_KEY` | local + remote | RunPod API key (Settings → API Keys) |
+| `RUNPOD_POD_ID` | local + remote | Pod ID to start/stop (from RunPod console URL) |
+| `GH_TOKEN` | remote | GitHub token with `repo` + `issues` scope (for `gh` CLI auth) |
+| `GIT_EMAIL` | remote | Git author email for result commits |
+
+Set these in your shell profile locally and in the pod's environment (e.g. RunPod pod environment variables or a `.env` file sourced in the pod's startup template).
+
+### Submit CLI (run locally)
+
+```bash
+# Submit a job and start the backend if it isn't running
+uv run -m claudini.pipeline.submit create \
+  --method gcg --preset random_valid --sample 0 1 2 --seed 0 \
+  --start-backend
+
+# List queued jobs
+uv run -m claudini.pipeline.submit list
+
+# Stream job progress and pull results when done
+uv run -m claudini.pipeline.submit watch 42
+
+# Backend lifecycle
+uv run -m claudini.pipeline.submit backend status
+uv run -m claudini.pipeline.submit backend start
+uv run -m claudini.pipeline.submit backend stop
+```
+
+### Worker daemon (run on the remote machine)
+
+```bash
+# Bootstrap a fresh machine (first time only)
+GH_TOKEN=... CLAUDINI_REPO=... GIT_EMAIL=... bash scripts/bootstrap.sh
+
+# Start the worker — polls queue, runs jobs, stops backend when queue empties
+CLAUDINI_BACKEND=runpod RUNPOD_API_KEY=... RUNPOD_POD_ID=... \
+  uv run -m claudini.pipeline.worker
+
+# Run exactly one job then exit (useful for testing)
+uv run -m claudini.pipeline.worker --once
+```
+
+Results are committed to `results/` by the worker and pushed to the repo. Run `git pull` locally to fetch them (or use `watch`, which does this automatically on completion).
+
 ## Autoresearch skill
 
 The `/claudini` skill (`.claude/skills/claudini/SKILL.md`) drives the autoresearch loop. It takes a **run code** and a **goal** as positional arguments:
@@ -123,6 +175,8 @@ The `/claudini` skill (`.claude/skills/claudini/SKILL.md`) drives the autoresear
 ```
 
 The run code determines: method directory (`claudini/methods/claude_<run_code>/`), method name prefix (`claude_<run_code>_v`), git branch (`loop/<run_code>`), and agent log location.
+
+The skill commits and pushes each new method before submitting it to the pipeline, then blocks on `watch` until results are available before logging and iterating.
 
 **Keep the skill in sync with the framework.** When you change the `TokenOptimizer` interface, config format, CLI flags, or project structure, update the skill prompt accordingly.
 

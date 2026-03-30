@@ -1,6 +1,6 @@
 ---
 name: claudini
-description: Run one iteration of the autoresearch loop — study existing attack methods, design a better optimizer, implement it, benchmark it, and commit. Meant to be called repeatedly via /loop.
+description: Run one iteration of the autoresearch loop — study existing attack methods, design a better optimizer, implement it, benchmark it via the async pipeline, and log results. Meant to be called repeatedly via /loop.
 argument-hint: "run_code goal — e.g. safeguard break Qwen2.5-7B under 1e15 FLOPs"
 ---
 
@@ -66,17 +66,55 @@ Design and implement a new optimizer that achieves lower loss than existing meth
 
 Create the next version as a proper Python package under `claudini/methods/claude_$ARGUMENTS[0]/v<N>/` with `method_name = "claude_$ARGUMENTS[0]_v<N>"`.
 
-## Step 2 — Run the benchmark
+## Step 2 — Commit, submit, and wait for results
 
-The method must not override config settings — suffix length, FLOP budget, model, samples, etc. are controlled by the config, not the optimizer.
+The worker runs on the remote machine by pulling the latest code from git. **Commit and push the new method before submitting the job** — otherwise the worker will not find it.
 
-Run the full benchmark. Launch in background and don't wait:
 ```bash
-uv run -m claudini.run_bench <config> --method claude_$ARGUMENTS[0]_v<N>
+# 1. Commit the new method to the current branch
+git add claudini/methods/claude_$ARGUMENTS[0]/
+git commit -m "method: claude_$ARGUMENTS[0]_v<N> — <one-line description of key idea>"
+git push
 ```
 
-## Step 3 — Commit and update log
+```bash
+# 2. Submit the job to the GitHub Issues queue.
+#    --start-backend starts the compute backend if it is not already running.
+#    --json returns machine-readable output so we can capture the issue number.
+RESULT=$(uv run -m claudini.pipeline.submit create \
+  --method claude_$ARGUMENTS[0]_v<N> \
+  --preset <config_name> \
+  --sample 0 1 2 \
+  --seed 0 \
+  --notes "<one-line rationale for this method>" \
+  --start-backend \
+  --json)
+ISSUE=$(echo "$RESULT" | python -c "import sys, json; print(json.load(sys.stdin)['issue'])")
+echo "Job submitted as issue #$ISSUE"
+```
 
-Commit the new method and any config changes to the `loop/$ARGUMENTS[0]` branch. Then update `claudini/methods/claude_$ARGUMENTS[0]/AGENT_LOG.md` with:
+```bash
+# 3. Block until the job closes, then automatically pull results.
+#    Streams worker comments to the terminal as they arrive.
+uv run -m claudini.pipeline.submit watch "$ISSUE"
+```
+
+After `watch` exits successfully, `git pull` has already been run and `results/` is up to date.
+
+If `CLAUDINI_BACKEND` is not set, the job is still queued to GitHub Issues but the backend must be started manually. The `watch` command still works — it will wait until the worker processes the job whenever the backend is started.
+
+## Step 3 — Analyse results and update log
+
+Read the new result files and compare against prior methods. Update `claudini/methods/claude_$ARGUMENTS[0]/AGENT_LOG.md` with:
+- Issue number and link (e.g. `#42`)
 - What method you created and the key idea
+- The best loss achieved vs. previous best
 - What to try next iteration
+
+Commit the updated log:
+
+```bash
+git add claudini/methods/claude_$ARGUMENTS[0]/AGENT_LOG.md
+git commit -m "log: claude_$ARGUMENTS[0]_v<N> results (issue #$ISSUE)"
+git push
+```

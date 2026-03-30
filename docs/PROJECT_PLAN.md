@@ -53,7 +53,7 @@ Methods auto-register via `__init_subclass__` when `method_name` is set as a cla
 
 ### Session 1 (2026-03-27)
 
-**Phase 1 — Orientation.** Read full codebase: base.py (TokenOptimizer, FlopCounter, RunResult), all configs, GCG optimizer, autoresearch skill prompt. Created project scaffolding: PROJECT_PLAN.md, RUNPOD_SETUP.md, COST_LOG.md, run_remote.sh, baseline_analysis.py.
+**Phase 1 — Orientation.** Read full codebase: base.py (TokenOptimizer, FlopCounter, RunResult), all configs, GCG optimizer, autoresearch skill prompt. Created project scaffolding: PROJECT_PLAN.md, RUNPOD_SETUP.md, COST_LOG.md, baseline_analysis.py.
 
 **Phase 2 — Smoke tests.** Set up RunPod 4090 pod, installed uv and dependencies, cloned repo. Ran GCG on Qwen2.5-7B at 1e13 FLOPs (too small — only 1 step) then 1e15 FLOPs (5 steps, loss 16.0 → 14.6). Pipeline verified end-to-end.
 
@@ -108,13 +108,15 @@ Methods auto-register via `__init_subclass__` when `method_name` is set as a cla
 
 ### Phase 5: Autoresearch Loop — NOT STARTED
 
-- [ ] Set up Claude Code to run benchmarks on RunPod via SSH
+- [ ] Complete one-time RunPod pod setup (see `docs/RUNPOD_SETUP.md`)
+- [ ] Smoke-test the pipeline end-to-end (one job, `--max-flops 1e12`, confirm issue closes and results appear)
 - [ ] Run `/claudini` skill for 10-15 iterations targeting Qwen2.5-7B with 1e15 FLOPs
 - [ ] Evaluate whether the agent discovers methods that improve on baselines
 - [ ] Analyze the agent log and method evolution chain
 
+**Benchmark pipeline** (implemented in session 2, 2026-03-30): jobs submitted as GitHub Issues from local machine, worker daemon on pod processes queue and self-stops, results committed to git. See `claudini/pipeline/` and `claudini/backends/`.
+
 **Open questions for Phase 5:**
-- How to wire the skill to execute benchmarks on the pod (SSH wrapper vs running Claude Code on the pod directly)
 - Whether to use NF4 or bf16 with reduced candidates for the autoresearch loop
 - Whether 1e15 FLOPs is sufficient budget for the loop to find meaningful improvements
 
@@ -123,9 +125,8 @@ Methods auto-register via `__init_subclass__` when `method_name` is set as a cla
 | File | Purpose |
 |------|---------|
 | `docs/PROJECT_PLAN.md` | This file |
-| `docs/RUNPOD_SETUP.md` | SSH setup, repo sync, remote execution guide |
+| `docs/RUNPOD_SETUP.md` | One-time pod setup guide (env vars, startup command, bootstrap) |
 | `docs/COST_LOG.md` | Manual cost tracking template (GPU + API) |
-| `scripts/run_remote.sh` | Shell helper to launch jobs on RunPod via SSH |
 | `configs/random_train_q4.yaml` | 4-bit NF4 quantized config for Qwen2.5-7B |
 | `configs/demo_train_fast.yaml` | Low-budget GPT-2 config for quick local iteration |
 | `notebooks/baseline_analysis.py` | Results loader + leaderboard generator |

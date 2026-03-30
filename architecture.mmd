@@ -1,0 +1,87 @@
+---
+title: "Claudini — How a Benchmark Run Works"
+---
+flowchart TD
+
+    subgraph CLI["① User kicks off a run"]
+        RB["🖥️ Command line\nSpecify: which preset, which methods,\nhow many FLOPs, which samples/seeds\n\ne.g.  uv run -m claudini.run_bench random_valid --method gcg"]
+    end
+
+    subgraph Config["② Experiment Blueprint\n— defines every parameter of the run —"]
+        YAML["📄 YAML Preset File\nconfigs/*.yaml\n\nHuman-readable spec:\n model to attack, compute budget,\n sample indices, random seeds, token length"]
+        CP["Loader\nMerges preset defaults\nwith any CLI overrides"]
+        BC["BenchmarkConfig\n\nFinal, validated settings object\npassed to the runner"]
+        YAML --> CP -->|"CLI flags override any preset value"| BC
+    end
+
+    subgraph InputSpec["③ Problem Generator\n— what the optimizer is actually trying to solve —"]
+        IS["InputSpec\nThree independent axes:"]
+        SRC["Source\nWhere does the prompt + target come from?\n• Random ASCII tokens\n• Fixed strings\n• ClearHarm dataset (real harmful queries)"]
+        LAY["Layout\nWhich token positions are free to optimize?\n• Suffix: all optim tokens appended at the end"]
+        INIT["Initialization\nHow to fill free positions at the start?\n• RandomInit: sample from allowed vocabulary"]
+        SS["SampleSpec\nA concrete (prompt, target) pair\nready for the optimizer to work on"]
+        IS --> SRC & LAY & INIT
+        SRC -->|"generate(sample_id) → one concrete instance"| SS
+    end
+
+    subgraph Registry["④ Method Library\n— self-registering catalog of attack algorithms —"]
+        REG["Auto-Discovery\nAt startup, recursively imports\nevery submodule under methods/"]
+        ISC["🔌 Auto-Registration\nEach optimizer class registers itself\nby setting a  method_name  class variable.\nNo central registry file to edit."]
+        MDICT["Method Lookup Table\nname → optimizer class\n\ne.g. 'gcg' → GCGOptimizer\n     'claude_random_v42' → ClaudeOptimizer"]
+        REG -->|"import triggers __init_subclass__"| ISC --> MDICT
+    end
+
+    subgraph Methods["Optimizer Implementations\n— algorithms that search for adversarial suffixes —"]
+        TO["TokenOptimizer  (shared contract)\n\nEvery method must implement:\n  setup(prompt, target)  — tokenize, embed, prepare state\n  step(step_num)  → (loss, suffix_string)\n\nBase class handles: loop control, FLOP budget,\nresult collection, prefix-cache injection"]
+        GCG["Baseline: GCG + variants\ngcg, acg, …\n\nGradient-guided greedy coordinate search\n(original Zou et al. paper)"]
+        ORIG["Other published baselines\npgd, gbda, magic, npg, fwd_gcg, …\n\nReproduced for fair comparison"]
+        CR["Claude-designed optimizers\nclaude_random_v1 … v120+\n\nIteratively improved by Claude\nvia the autoresearch loop"]
+        CS["Safeguard-targeted variants\nclaude_safeguard_v1 … v107"]
+        CU["Unrolled variants\nclaude_unrolled_v1 … v6"]
+        TO -->|"subclass"| GCG & ORIG
+        TO -->|"subclass"| CR & CS & CU
+    end
+
+    subgraph Core["Support Infrastructure\n— shared tools used by every optimizer —"]
+        FC["⚡ FLOP Counter\n\nEvery model call must be reported:\n  count_forward(n_tokens)\n  count_backward(n_tokens)\n\nFormula: FLOPs_fwd = 2 × N_params × n_tokens\nEnforces a fair compute budget across methods"]
+        PC["⚡ Prefix KV-Cache  (optional)\n\nPre-computes fixed-prefix attention keys/values\nand injects them transparently into every forward pass.\nSpeedup: avoids recomputing the same context each step."]
+        RR["📊 RunResult\n\nFull trace of the optimization:\n  losses, FLOP counts, wall-clock times,\n  suffix string at each step,\n  final greedy completion + match rate"]
+    end
+
+    subgraph Runner["⑤ Benchmark Orchestrator\n— runs all (method × sample × seed) combinations —"]
+        BR["BenchmarkRunner\n\nLoads the model once, reuses it\nacross all methods, samples, and seeds\n(avoids redundant GPU memory allocation)"]
+        RM["For each method:\n  For each sample_id:\n    For each seed:\n      instantiate optimizer → run → collect result"]
+        LOOP["⚙️ Optimization Loop\n\n  setup() called once per run\n  step() called repeatedly\n  Stops when FLOP budget or time limit hit\n  Saves result incrementally (fault-tolerant)"]
+        BR --> RM --> LOOP
+    end
+
+    subgraph Model["Language Model\n(the target being attacked)"]
+        LLM["🤖 HuggingFace Model + Tokenizer\n\nLoaded once at runner start.\nCan be quantized to 4-bit (bfloat16)\nto fit on consumer GPUs."]
+    end
+
+    subgraph Results["⑥ Results\n— one JSON file per (method, sample, seed) —"]
+        JSON["💾  results/\n      {method}/{preset}/{model}/\n        sample_{S}_seed_{N}.json\n\nExisting files are auto-skipped,\nso interrupted runs resume safely."]
+    end
+
+    RB -->|"parse preset name + any overrides"| Config
+    RB -->|"resolve method names to classes"| Registry
+    BC -->|"settings flow into runner"| BR
+    IS -->|"input spec is part of the config"| BC
+    MDICT -->|"selected optimizer classes"| BR
+    SS -->|"concrete (prompt, target) for each step"| LOOP
+    LLM -->|"model + tokenizer passed to optimizer"| BR
+    LOOP -->|"reports every model call"| FC
+    LOOP -->|"optional: warm up KV cache before stepping"| PC
+    PC -->|"wraps"| LLM
+    LOOP -->|"accumulates into"| RR
+    RR -->|"written after every run"| JSON
+
+    style CLI fill:#dbeafe,stroke:#93c5fd
+    style Config fill:#dcfce7,stroke:#86efac
+    style InputSpec fill:#fef9c3,stroke:#fde047
+    style Registry fill:#fce7f3,stroke:#f9a8d4
+    style Methods fill:#ede9fe,stroke:#c4b5fd
+    style Core fill:#fff7ed,stroke:#fdba74
+    style Runner fill:#d1fae5,stroke:#6ee7b7
+    style Model fill:#f0f9ff,stroke:#7dd3fc
+    style Results fill:#fef2f2,stroke:#fca5a5
