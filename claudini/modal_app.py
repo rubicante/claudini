@@ -98,7 +98,8 @@ def run_worker(once: bool = True) -> None:
     subprocess.run(["git", "-C", repo_dir, "config", "user.email", git_email], check=True)
     subprocess.run(["git", "-C", repo_dir, "config", "user.name", git_name], check=True)
 
-    # gh CLI picks up GH_TOKEN from the environment automatically — no auth step needed.
+    # Configure git to use gh as a credential helper so push/pull work over HTTPS.
+    subprocess.run(["gh", "auth", "setup-git"], check=True)
 
     # ── run worker ────────────────────────────────────────────────────────────
     # CLAUDINI_BACKEND is intentionally unset here — the worker exits normally
