@@ -97,9 +97,19 @@ def run_worker(once: bool = True) -> None:
         check=True,
     )
 
-    # ── git identity ──────────────────────────────────────────────────────────
-    git_email = os.environ.get("GIT_EMAIL", "worker@claudini")
-    git_name = os.environ.get("GIT_NAME", "Claudini Worker")
+    # ── git identity — derived from GH_TOKEN via GitHub API ──────────────────
+    import json as _json
+    import urllib.request
+
+    gh_token = os.environ["GH_TOKEN"]
+    req = urllib.request.Request(
+        "https://api.github.com/user",
+        headers={"Authorization": f"Bearer {gh_token}", "Accept": "application/vnd.github+json"},
+    )
+    with urllib.request.urlopen(req) as resp:
+        profile = _json.loads(resp.read())
+    git_name = profile["login"]
+    git_email = f"{profile['id']}+{profile['login']}@users.noreply.github.com"
     subprocess.run(["git", "-C", repo_dir, "config", "user.email", git_email], check=True)
     subprocess.run(["git", "-C", repo_dir, "config", "user.name", git_name], check=True)
 

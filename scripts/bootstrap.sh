@@ -18,8 +18,6 @@ set -euo pipefail
 REPO_URL="${CLAUDINI_REPO:?Please set CLAUDINI_REPO to the git clone URL}"
 REPO_DIR="${HOME}/claudini"
 GH_TOKEN="${GH_TOKEN:-}"
-GIT_EMAIL="${GIT_EMAIL:?Please set GIT_EMAIL for result commits}"
-GIT_NAME="${GIT_NAME:-Claudini Worker}"
 
 # ── uv ────────────────────────────────────────────────────────────────────────
 if ! command -v uv &>/dev/null; then
@@ -63,10 +61,13 @@ else
     echo "  WARNING: GH_TOKEN not set. Run 'gh auth login' manually before starting the worker."
 fi
 
-# ── git identity ──────────────────────────────────────────────────────────────
-echo "==> Configuring git identity"
-git config user.email "${GIT_EMAIL}"
-git config user.name  "${GIT_NAME}"
+# ── git identity — derived from GH_TOKEN via GitHub API ──────────────────────
+echo "==> Configuring git identity from GitHub account"
+GH_LOGIN=$(gh api user --jq '.login')
+GH_ID=$(gh api user --jq '.id')
+git config user.name  "${GH_LOGIN}"
+git config user.email "${GH_ID}+${GH_LOGIN}@users.noreply.github.com"
+echo "  git identity: ${GH_LOGIN} <${GH_ID}+${GH_LOGIN}@users.noreply.github.com>"
 
 # ── done ─────────────────────────────────────────────────────────────────────
 echo ""

@@ -125,8 +125,7 @@ Benchmarks run on a remote GPU machine. The pipeline uses GitHub Issues as a job
 | `CLAUDINI_BACKEND` | local + remote | Which backend to use (`runpod`) |
 | `RUNPOD_API_KEY` | local + remote | RunPod API key (Settings → API Keys) |
 | `RUNPOD_POD_ID` | local + remote | Pod ID to start/stop (from RunPod console URL) |
-| `GH_TOKEN` | remote | GitHub token with `repo` + `issues` scope (for `gh` CLI auth) |
-| `GIT_EMAIL` | remote | Git author email for result commits |
+| `GH_TOKEN` | remote | GitHub token with `repo` + `issues` scope — git identity is derived from this automatically |
 
 Set these in your shell profile locally and in the pod's environment (e.g. RunPod pod environment variables or a `.env` file sourced in the pod's startup template).
 

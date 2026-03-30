@@ -42,8 +42,7 @@ In the RunPod console, open your pod → **Edit** → **Environment Variables**.
 | `CLAUDINI_BACKEND` | `runpod` |
 | `RUNPOD_API_KEY` | Your RunPod API key (Settings → API Keys) |
 | `RUNPOD_POD_ID` | Your pod ID (from the dashboard URL) |
-| `GH_TOKEN` | GitHub personal access token (scopes: `repo`, `issues`) |
-| `GIT_EMAIL` | Email address for result commits (e.g. `worker@claudini`) |
+| `GH_TOKEN` | GitHub personal access token (scopes: `repo`, `issues`) — git identity derived from this automatically |
 | `CLAUDINI_REPO` | SSH or HTTPS clone URL of this repo |
 
 These persist across pod stops/starts — set them once.
