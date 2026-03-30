@@ -45,12 +45,13 @@ uv sync --extra quantize
 # ── GitHub CLI ────────────────────────────────────────────────────────────────
 if ! command -v gh &>/dev/null; then
     echo "==> Installing gh CLI"
+    mkdir -p /usr/share/keyrings
     curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-        | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg 2>/dev/null
+        -o /usr/share/keyrings/githubcli-archive-keyring.gpg
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] \
 https://cli.github.com/packages stable main" \
-        | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-    sudo apt-get update -q && sudo apt-get install -y gh
+        > /etc/apt/sources.list.d/github-cli.list
+    apt-get update -q && apt-get install -y gh
 fi
 echo "gh $(gh --version | head -1)"
 
