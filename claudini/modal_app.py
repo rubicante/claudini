@@ -98,8 +98,20 @@ def run_worker(once: bool = True) -> None:
     subprocess.run(["git", "-C", repo_dir, "config", "user.email", git_email], check=True)
     subprocess.run(["git", "-C", repo_dir, "config", "user.name", git_name], check=True)
 
-    # Configure git to use gh as a credential helper so push/pull work over HTTPS.
-    subprocess.run(["gh", "auth", "setup-git"], check=True)
+    # Embed GH_TOKEN in the remote URL so git push/pull work without a credential helper.
+    import re as _re
+    remote_url = subprocess.check_output(
+        ["git", "-C", repo_dir, "remote", "get-url", "origin"], text=True
+    ).strip()
+    if "github.com" in remote_url and "://" in remote_url:
+        authed_url = _re.sub(
+            r"https://(?:[^@]+@)?github\.com",
+            f"https://x-access-token:{gh_token}@github.com",
+            remote_url,
+        )
+        subprocess.run(
+            ["git", "-C", repo_dir, "remote", "set-url", "origin", authed_url], check=True
+        )
 
     # ── run worker ────────────────────────────────────────────────────────────
     # CLAUDINI_BACKEND is intentionally unset here — the worker exits normally
