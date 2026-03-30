@@ -34,6 +34,9 @@ target-version = "py314"
 quantize = [
     "bitsandbytes>=0.43",
 ]
+modal = [
+    "modal>=0.70",
+]
 
 [project.scripts]
 claudini-submit = "claudini.pipeline.submit:app"

@@ -4,9 +4,11 @@ import os
 
 from .base import ComputeBackend
 from .runpod import RunPodBackend
+from .modal_backend import ModalBackend
 
 _REGISTRY: dict[str, type[ComputeBackend]] = {
     "runpod": RunPodBackend,
+    "modal": ModalBackend,
 }
 
 
