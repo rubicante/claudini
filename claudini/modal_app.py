@@ -9,8 +9,8 @@ no host availability issues. Modal allocates GPUs globally across their fleet.
 
 Required Modal secret (create at modal.com/secrets or via `modal secret create`):
     Name: claudini-secrets
-    Keys: GH_TOKEN, GIT_EMAIL, CLAUDINI_REPO
-    Optional: GIT_NAME, RUNPOD_API_KEY (not needed for Modal)
+    Keys: GH_TOKEN, CLAUDINI_REPO
+    Optional: RUNPOD_API_KEY (not needed for Modal)
 
 Required Modal volume (created automatically on first deploy):
     claudini-hf-cache  →  /root/.cache/huggingface
@@ -42,20 +42,8 @@ image = (
         'https://cli.github.com/packages stable main" '
         "> /etc/apt/sources.list.d/github-cli.list",
         "apt-get update -q && apt-get install -y gh",
-    )
-    .pip_install(
-        # Core ML stack — torch pulls in CUDA-enabled wheels from PyPI
-        "torch>=2.0",
-        "transformers>=4.40",
-        "accelerate>=1.13.0",
-        "bitsandbytes>=0.43",
-        "datasets>=2.14",
-        # Project dependencies
-        "numpy>=2.0",
-        "pyyaml>=6.0",
-        "scipy>=1.10",
-        "tqdm>=4.60",
-        "typer>=0.9",
+        # uv
+        "curl -LsSf https://astral.sh/uv/install.sh | sh",
     )
 )
 
@@ -80,10 +68,10 @@ def run_worker(once: bool = True) -> None:
     Issues queue, commits results, and exits when the queue is empty.
     """
     import subprocess
-    import sys
 
     repo_url = os.environ["CLAUDINI_REPO"]
     repo_dir = "/tmp/claudini"
+    uv = "/root/.local/bin/uv"
 
     # ── repo ──────────────────────────────────────────────────────────────────
     if os.path.isdir(f"{repo_dir}/.git"):
@@ -91,11 +79,8 @@ def run_worker(once: bool = True) -> None:
     else:
         subprocess.run(["git", "clone", repo_url, repo_dir], check=True)
 
-    # Install the claudini package itself (deps already in image)
-    subprocess.run(
-        [sys.executable, "-m", "pip", "install", "--no-deps", "--quiet", "-e", repo_dir],
-        check=True,
-    )
+    # Install project and dependencies (ephemeral uv cache, packages take ~1min)
+    subprocess.run([uv, "sync", "--extra", "quantize"], cwd=repo_dir, check=True)
 
     # ── git identity — derived from GH_TOKEN via GitHub API ──────────────────
     import json as _json
@@ -113,18 +98,12 @@ def run_worker(once: bool = True) -> None:
     subprocess.run(["git", "-C", repo_dir, "config", "user.email", git_email], check=True)
     subprocess.run(["git", "-C", repo_dir, "config", "user.name", git_name], check=True)
 
-    # ── gh auth ───────────────────────────────────────────────────────────────
-    subprocess.run(
-        ["gh", "auth", "login", "--with-token"],
-        input=os.environ["GH_TOKEN"],
-        text=True,
-        check=True,
-    )
+    # gh CLI picks up GH_TOKEN from the environment automatically — no auth step needed.
 
     # ── run worker ────────────────────────────────────────────────────────────
     # CLAUDINI_BACKEND is intentionally unset here — the worker exits normally
     # when the queue empties. Modal terminates the container automatically.
-    cmd = [sys.executable, "-m", "claudini.pipeline.worker"]
+    cmd = [uv, "run", "-m", "claudini.pipeline.worker"]
     if once:
         cmd.append("--once")
     subprocess.run(cmd, cwd=repo_dir, check=True)

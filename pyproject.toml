@@ -32,7 +32,7 @@ target-version = "py314"
 
 [project.optional-dependencies]
 quantize = [
-    "bitsandbytes>=0.43",
+    "bitsandbytes>=0.46.1",
 ]
 modal = [
     "modal>=0.70",

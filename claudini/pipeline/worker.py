@@ -40,7 +40,7 @@ def _pull_latest() -> None:
 
 def _commit_and_push_results(issue_number: int) -> str:
     """Stage any new files under results/, commit, push. Returns the new short SHA."""
-    _git(["add", "results/"])
+    _git(["add", "-f", "results/"])
 
     # Nothing to commit if the index is clean after staging
     staged = subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=REPO_ROOT)
