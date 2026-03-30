@@ -1,10 +1,23 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from dataclasses import dataclass
 
 from .job import JobSpec
+
+
+def _origin_repo() -> str:
+    """Return 'owner/repo' for the origin remote, e.g. 'rubicante/claudini'."""
+    url = subprocess.check_output(
+        ["git", "remote", "get-url", "origin"], text=True
+    ).strip()
+    # handles both https://github.com/owner/repo.git and git@github.com:owner/repo.git
+    match = re.search(r"[:/]([^/]+/[^/]+?)(?:\.git)?$", url)
+    if not match:
+        raise RuntimeError(f"Cannot parse repo from origin URL: {url}")
+    return match.group(1)
 
 # ── GitHub issue labels ───────────────────────────────────────────────────────
 
@@ -25,7 +38,9 @@ _LABEL_DEFS = {
 
 
 def _gh(*args: str) -> str:
-    result = subprocess.run(["gh", *args], capture_output=True, text=True, check=True)
+    result = subprocess.run(
+        ["gh", "--repo", _origin_repo(), *args], capture_output=True, text=True, check=True
+    )
     return result.stdout.strip()
 
 

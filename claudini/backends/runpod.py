@@ -73,7 +73,7 @@ class RunPodBackend(ComputeBackend):
         req = urllib.request.Request(
             f"{_API_URL}?api_key={self._api_key}",
             data=payload,
-            headers={"Content-Type": "application/json"},
+            headers={"Content-Type": "application/json", "User-Agent": "claudini/1.0"},
             method="POST",
         )
         with urllib.request.urlopen(req, timeout=30) as resp:
