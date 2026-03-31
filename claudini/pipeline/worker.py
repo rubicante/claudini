@@ -51,6 +51,10 @@ def _commit_and_push_results(issue_number: int) -> str:
     msg = f"results: job #{issue_number}"
     _git(["commit", "-m", msg])
 
+    # Discard any uncommitted changes (e.g. uv.lock updates from uv sync)
+    # before rebasing — we only want to push the results commit.
+    _git(["checkout", "--", "."])
+
     # Rebase on top of any commits pushed while we were running, then push
     _git(["pull", "--rebase"])
     _git(["push"])
