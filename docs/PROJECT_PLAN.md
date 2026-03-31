@@ -51,6 +51,36 @@ Methods auto-register via `__init_subclass__` when `method_name` is set as a cla
 
 ## Progress Log
 
+### Session 2 (2026-03-30)
+
+**Phase 5 prep — Async pipeline (complete).** Built the full async benchmark pipeline so jobs can be submitted from the local machine and executed on a remote GPU without manual intervention.
+
+**Architecture:** GitHub Issues serve as the job queue (no extra infrastructure). Each job is one issue; the worker claims it by editing the issue body, runs the benchmark, commits results to `results/`, closes the issue with a summary, then processes the next job.
+
+**Backends implemented:**
+- **Modal** (primary) — serverless GPU via `modal.com`. `modal deploy claudini/modal_app.py` bakes deps into a container image; code is pulled from git at runtime so new optimizers don't require a redeploy. HF model cache lives on a persistent Modal Volume (`claudini-hf-cache`). No pod IDs or SSH needed.
+- **RunPod** (secondary) — dedicated pod, started/stopped via RunPod GraphQL API.
+
+**Key files added:**
+
+| File | Purpose |
+|---|---|
+| `claudini/modal_app.py` | Modal app: image def, HF cache volume, `run_worker` function |
+| `claudini/pipeline/job.py` | Job dataclass and serialisation |
+| `claudini/pipeline/queue.py` | GitHub Issues queue (create, claim, close, list) |
+| `claudini/pipeline/worker.py` | Worker daemon: poll → claim → run → commit → repeat |
+| `claudini/pipeline/submit.py` | Submit CLI (`create`, `list`, `watch`, `backend` subcommands) |
+| `claudini/backends/base.py` | `Backend` abstract base class |
+| `claudini/backends/modal_backend.py` | Modal backend: `start` calls `modal run` |
+| `claudini/backends/runpod.py` | RunPod backend: `start`/`stop` via GraphQL API |
+| `scripts/bootstrap.sh` | One-time machine setup (uv, gh CLI, repo clone, git identity) |
+| `docs/RUNPOD_SETUP.md` | RunPod one-time setup guide |
+| `docs/MODAL_SETUP.md` | Modal one-time setup guide |
+
+**Verified end-to-end:** GCG baseline run via the pipeline matched paper numbers. CLAUDE.md updated with env var tables for both backends.
+
+---
+
 ### Session 1 (2026-03-27)
 
 **Phase 1 — Orientation.** Read full codebase: base.py (TokenOptimizer, FlopCounter, RunResult), all configs, GCG optimizer, autoresearch skill prompt. Created project scaffolding: PROJECT_PLAN.md, RUNPOD_SETUP.md, COST_LOG.md, baseline_analysis.py.
@@ -127,6 +157,7 @@ Methods auto-register via `__init_subclass__` when `method_name` is set as a cla
 | `docs/PROJECT_PLAN.md` | This file |
 | `docs/RUNPOD_SETUP.md` | One-time pod setup guide (env vars, startup command, bootstrap) |
 | `docs/COST_LOG.md` | Manual cost tracking template (GPU + API) |
+| `docs/MODAL_SETUP.md` | Modal one-time setup guide (secrets, deploy, local env) |
 | `configs/random_train_q4.yaml` | 4-bit NF4 quantized config for Qwen2.5-7B |
 | `configs/demo_train_fast.yaml` | Low-budget GPT-2 config for quick local iteration |
 | `notebooks/baseline_analysis.py` | Results loader + leaderboard generator |

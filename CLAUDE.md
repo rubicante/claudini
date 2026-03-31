@@ -118,16 +118,33 @@ Line length 120. Always run before committing.
 
 Benchmarks run on a remote GPU machine. The pipeline uses GitHub Issues as a job queue so work can be submitted from anywhere, independent of whether the compute backend is currently running.
 
-### Required environment variables
+Two backends are supported. **Modal** (primary) is serverless — no pod IDs, persistent HF cache volume, GPU allocated on demand. **RunPod** (secondary) uses a dedicated pod that is started and stopped via the API.
 
-| Variable | Where | Purpose |
-|---|---|---|
-| `CLAUDINI_BACKEND` | local + remote | Which backend to use (`runpod`) |
-| `RUNPOD_API_KEY` | local + remote | RunPod API key (Settings → API Keys) |
-| `RUNPOD_POD_ID` | local + remote | Pod ID to start/stop (from RunPod console URL) |
-| `GH_TOKEN` | remote | GitHub token with `repo` + `issues` scope — git identity is derived from this automatically |
+### Environment variables
 
-Set these in your shell profile locally and in the pod's environment (e.g. RunPod pod environment variables or a `.env` file sourced in the pod's startup template).
+**Local machine (all backends):**
+
+| Variable | Purpose |
+|---|---|
+| `CLAUDINI_BACKEND` | Which backend to use: `modal` (default) or `runpod` |
+
+**Modal backend — local only:**
+
+| Variable | Purpose |
+|---|---|
+| `CLAUDINI_MODAL_GPU` | GPU type (optional, default `A10G`) |
+
+Modal secrets (`GH_TOKEN`, `CLAUDINI_REPO`) are stored in your Modal workspace — not in shell env.
+
+**RunPod backend — local + remote:**
+
+| Variable | Purpose |
+|---|---|
+| `RUNPOD_API_KEY` | RunPod API key (Settings → API Keys) |
+| `RUNPOD_POD_ID` | Pod ID to start/stop (from RunPod console URL) |
+| `GH_TOKEN` | GitHub token with `repo` + `issues` scope — git identity derived automatically |
+
+See `docs/MODAL_SETUP.md` and `docs/RUNPOD_SETUP.md` for one-time setup instructions.
 
 ### Submit CLI (run locally)
 
@@ -149,10 +166,10 @@ uv run -m claudini.pipeline.submit backend start
 uv run -m claudini.pipeline.submit backend stop
 ```
 
-### Worker daemon (run on the remote machine)
+### Worker daemon (RunPod only — Modal runs its own worker automatically)
 
 ```bash
-# Bootstrap a fresh machine (first time only)
+# Bootstrap a fresh RunPod machine (first time only)
 GH_TOKEN=... CLAUDINI_REPO=... GIT_EMAIL=... bash scripts/bootstrap.sh
 
 # Start the worker — polls queue, runs jobs, stops backend when queue empties
