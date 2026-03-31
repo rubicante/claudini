@@ -27,9 +27,9 @@ class ModalBackend(ComputeBackend):
 
     def start(self) -> None:
         """Spawn the Modal worker function asynchronously."""
-        # Import here so modal is only required when actually used
-        from claudini.modal_app import run_worker
+        import modal
 
+        run_worker = modal.Function.from_name("claudini", "run_worker")
         call = run_worker.spawn(once=True)
         _CALL_ID_FILE.write_text(json.dumps({"call_id": call.object_id}))
 
@@ -41,7 +41,7 @@ class ModalBackend(ComputeBackend):
             import modal
 
             data = json.loads(_CALL_ID_FILE.read_text())
-            call = modal.functions.FunctionCall.from_id(data["call_id"])
+            call = modal.FunctionCall.from_id(data["call_id"])
             call.cancel(terminate_containers=True)
         except Exception:
             pass
@@ -56,7 +56,7 @@ class ModalBackend(ComputeBackend):
             import modal
 
             data = json.loads(_CALL_ID_FILE.read_text())
-            call = modal.functions.FunctionCall.from_id(data["call_id"])
+            call = modal.FunctionCall.from_id(data["call_id"])
             call.get(timeout=0)
             # get() returned — job is done
             _CALL_ID_FILE.unlink(missing_ok=True)
