@@ -78,8 +78,10 @@ class JobSpec:
     def to_bench_args(self) -> list[str]:
         """Return the argument list to pass to  uv run -m claudini.run_bench."""
         args = [self.preset, "--method", self.method]
-        args += ["--sample"] + [str(s) for s in self.samples]
-        args += ["--seed"] + [str(s) for s in self.seeds]
+        for s in self.samples:
+            args += ["--sample", str(s)]
+        for s in self.seeds:
+            args += ["--seed", str(s)]
         if self.max_flops is not None:
             args += ["--max-flops", str(self.max_flops)]
         return args
