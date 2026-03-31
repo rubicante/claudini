@@ -8,52 +8,51 @@
 ## Baseline
 
 Best method at 1e15 FLOPs (random_train_q4, Qwen2.5-7B): **PGD at 11.33** (mean over 5 samples).
+PGD gets ~590 gradient steps at 1e15. GCG gets only ~4 steps — discrete search too expensive.
 
-Key observation: PGD gets ~590 gradient steps at 1e15. It's better than GBDA (12.49) and all others.
-GCG gets only ~4 steps at this budget — discrete search is too expensive.
-
-## v1 — PGD + LSGM(0.85) + stripped auxiliary losses
-
-**Key ideas:**
-1. LSGM backward hooks on all LayerNorm modules (gamma=0.85): smooth gradient flow
-2. Strip suffix_control and suffix_nonrepeat losses: focus 100% gradient on target CE
-3. Faster entropy annealing (150 steps vs 250): sharpen distributions earlier
-4. Higher patience (150 vs 100): fewer disruptive resets
+## v1 — PGD + LSGM(0.85) + stripped auxiliary losses ✓ BEST
 
 **Issue:** [#15](https://github.com/rubicante/claudini/issues/15)
-**Results:** sample 0: 11.76, sample 1: 7.10, sample 2: 6.73 → **mean=8.53**
-**vs baseline:** PGD=11.33 → **improvement: +2.80** ✓
+**Results:** s0=11.76, s1=7.10, s2=6.73 → **mean=8.53** (+2.80 vs PGD)
 
-Loss curve analysis:
-- Sample 0: stuck at 13.37 for steps 100-500, finally reaches 11.76 at step ~500
-- Sample 1: big breakthrough jump 10.71→7.10 at step ~400
-- Sample 2: late breakthrough 9.77→6.73 near step 590
+LSGM + stripped aux losses dramatically helps samples 1&2 but NOT sample 0.
+Note: v1 is actually WORSE than PGD on sample 0 (11.76 vs 11.33).
+Patience mechanism never fires — relaxed loss always improves.
 
-## v2 — LSGM(0.75) + noisy patience escape (scale=1.5, alternating)
+## v2 — LSGM(0.75) + noisy patience escape (scale=1.5)
 
 **Issue:** [#16](https://github.com/rubicante/claudini/issues/16)
-**Results:** sample 0: 11.51, sample 1: 8.40, sample 2: 6.63 → **mean=8.85**
-**vs v1:** Worse overall. Sample 0 improved (+0.25), sample 1 regressed (-1.30).
+**Results:** s0=11.51, s1=8.40, s2=6.63 → mean=8.85 (worse than v1)
+gamma=0.75 disrupted sample 1's trajectory. Large noise scale too disruptive.
 
-**Analysis:** Lower gamma (0.75) disrupted sample 1's trajectory. v1 had a big jump to 7.10
-at step ~400; v2 converged to 8.40 at step ~300 and stalled. The large noise (1.5) may also
-have been too disruptive. Gamma=0.85 is better.
+## v3 — LSGM(0.85) + gentle noise kick (scale=0.5) — identical to v1 in practice
 
-## v3 — LSGM(0.85) + gentle noise kick (scale=0.5, every patience trigger)
+**Issue:** [#17](https://github.com/rubicante/claudini/issues/17)
+**Results:** s0=12.05, s1=7.10, s2=9.11 → mean=9.42 (worse than v1)
+Patience never fires → noise kicks never triggered. Variance = GPU non-determinism.
+3 samples insufficient for reliable comparison — results vary per GPU run.
 
-**Key ideas:**
-1. Restore gamma=0.85 (v1's proven-optimal value)
-2. Replace clean one-hot resets with gentle noisy kicks (scale=0.5 vs v2's 1.5)
-3. Every patience trigger uses noisy kick (not alternating like v2)
+## v4 — K=2 restarts + LSGM(0.85)
 
-**Hypothesis:** v2's large noise + wrong gamma caused regression. Small noise (0.5) + gamma=0.85
-should help sample 0 escape its 13.37 plateau while keeping samples 1&2 on good trajectories.
+**Issue:** [#18](https://github.com/rubicante/claudini/issues/18)
+**Results:** s0=11.30, s1=10.23, s2=11.02 → mean=10.85 (much worse than v1)
+K=2 gives only ~295 steps per restart. Breakthrough for s1&s2 happens at step 400-590.
+With 295 steps, breakthroughs don't happen. More steps > more restarts at this budget.
+
+## v5 — Stripped losses only, NO LSGM — ablation
+
+**Key question**: Does LSGM help or hurt sample 0?
+v1 LSGM makes s0=11.76 (vs PGD=11.33 without LSGM). Is LSGM hurting s0?
 
 **Issue:** (pending)
-**Best loss:** (pending)
+**Results:** (pending)
 
-## What to try next (v4)
+## What to try next (v6)
 
-- If v3 beats v1: try tuning noise_scale (0.3, 0.7) or patience (100, 200)
-- If v3 fails: try K=2 restarts with gamma=0.85 (more diversity, fewer steps per restart)
-- If variance still high: try larger sample set (samples 0-4) for better signal
+Ablation results will determine:
+- If v5 > v1: LSGM hurts sample 0 → adaptive LSGM (activate only after step 200)
+- If v5 ≈ v1 (same 1&2, better 0): LSGM helps 1&2 but hurts 0 → try two-phase approach
+- If v5 < v1: LSGM is responsible for most of the gain → focus on tuning gamma
+
+Key insight: Need 5 samples for reliable estimates. GPU non-determinism with 3 samples
+makes comparisons unreliable (v3 showed this clearly).
