@@ -22,12 +22,17 @@ GCG gets only ~4 steps at this budget — discrete search is too expensive.
 
 **Hypothesis:** PGD's auxiliary losses (suffix_control=0.007, suffix_nonrepeat=0.01) steal gradient capacity at the 1e15 regime where every step counts. Removing them + LSGM should reduce the discrete loss gap.
 
-**Issue:** (pending)
-**Best loss:** (pending)
-**vs baseline:** (pending)
+**Issue:** [#15](https://github.com/rubicante/claudini/issues/15)
+**Results:** sample 0: 11.76, sample 1: 7.10, sample 2: 6.73 → **mean=8.53**
+**vs baseline:** PGD=11.33 → **improvement: +2.80** ✓
 
-## What to try next
+## What to try next (v2)
 
-- If v1 beats PGD: try lower gamma (0.75, 0.85) and K=2 restarts
-- If v1 doesn't beat PGD: try GBDA + LSGM (different continuous parameterization)
-- Try coordinate-wise approach: gradient-guided position selection with fewer forward passes
+v1 beats PGD by 2.80 units — LSGM + stripped aux losses help significantly.
+High variance: sample 0 (11.76) is still near PGD while samples 1&2 are much better.
+
+Ideas for v2:
+1. **Lower gamma (0.75)**: v1 uses 0.85; the claude_random series found 0.68-0.70 optimal at 1e17 FLOPs. Try 0.75 for more aggressive gradient smoothing.
+2. **K=2 restarts**: add one more independent start to reduce variance (sample 0 got stuck). Cost: half the gradient steps but two shots at a good optimum.
+3. **Warm restart LR schedule**: cosine annealing with more cycles to escape local minima (currently entropy_anneal_steps=150, patience=150).
+4. **Initialization from best prior tokens**: try initializing suffix from a "warmup" PGD pass at high temperature.
