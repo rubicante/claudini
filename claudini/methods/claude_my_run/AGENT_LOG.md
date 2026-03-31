@@ -36,19 +36,28 @@ Helps hard samples (s0: 11.76→9.49) but hurts easy ones (s2: 6.73→10.06).
 Uniformly worse. Partial LSGM causes shallow early convergence (s1 stuck at 10.28 at step 200).
 Full LSGM across all layers is essential for dynamic optimization.
 
-## v8 — v1 + Adam state reset on discrete plateau
+## v8 — v1 + Adam state reset on discrete plateau (mean=10.22, WORSE)
 
 **Key insight:** Hard samples plateau 200-400 steps. Adam's exp_avg_sq saturates
 for "stuck" positions → effective LR → 0 despite cosine schedule. Resetting Adam
 state every 100 plateau steps forces fresh gradient estimation from current position.
 
-**Issue:** (pending)
-**Results:** (pending)
+**Issue:** [#23](https://github.com/rubicante/claudini/issues/23)
+s0=12.32, s1=7.10, s2=11.31, s3=11.25, s4=9.11 → **mean=10.22** (−1.0 vs v1)
 
-## What to try next (v9)
+**Post-mortem:** Adam reset backfires on easy samples. s2 collapsed from 6.73 → 11.31.
+The reset destroys accumulated momentum that was enabling deep convergence on samples
+that were already progressing well. The reset fires indiscriminately — it can hit during
+productive phases, not just true plateaus (discrete loss is noisy and may stagnate briefly
+even when the relaxed loss is still improving). The improvement on s4 (10.11 → 9.11) is
+not enough to offset the regression on s2.
 
-- If v8 > v1: tune adam_reset_patience (50, 150)
-- If v8 ≈ v1 or worse: try a fundamentally different approach
-  - GCG warm start for first ~4 steps (1e14 FLOPs), then v1 for remaining 9e14
-  - Randomized smoothing: evaluate loss at perturbed points for gradient estimation
-  - Different optimizer: SGD momentum (v1's base PGD uses Adam)
+## What to try next (v9) — session ended, picking up here
+
+- **GCG warm start:** Run GCG for the first ~1e14 FLOPs (~60 steps at this budget),
+  then switch to v1 (LSGM). GCG does discrete token swaps and can jump out of basins
+  that gradient descent can't escape; v1 then refines the continuous relaxation.
+- **Randomized smoothing:** Evaluate loss at multiple perturbed embedding points for
+  a smoother gradient estimate — may help hard samples that are in rough loss basins.
+- **Different optimizer:** Try SGD with momentum or Adagrad (less adaptive than Adam);
+  Adam's adaptive denominator is the saturation mechanism.
