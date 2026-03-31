@@ -4,3 +4,4 @@ from .v3 import ClaudeMyRunV3Optimizer
 from .v4 import ClaudeMyRunV4Optimizer
 from .v5 import ClaudeMyRunV5Optimizer
 from .v6 import ClaudeMyRunV6Optimizer
+from .v7 import ClaudeMyRunV7Optimizer

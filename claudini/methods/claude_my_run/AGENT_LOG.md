@@ -1,58 +1,64 @@
 # Agent Log: claude_my_run
 
 **Goal:** Break Qwen2.5-7B on random strings under 1e15 FLOPs
-**Config:** `random_train_q4` (Qwen/Qwen2.5-7B-Instruct, 1e15 FLOPs, 4-bit, samples 0-2, seed 0)
+**Config:** `random_train_q4` (Qwen/Qwen2.5-7B-Instruct, 1e15 FLOPs, 4-bit, samples 0-4, seed 0)
 **Branch:** `loop/my_run`
 **Method prefix:** `claude_my_run_v`
 
 ## Baseline
 
-Best method at 1e15 FLOPs (random_train_q4, Qwen2.5-7B): **PGD at 11.33** (mean over 5 samples).
-PGD gets ~590 gradient steps at 1e15. GCG gets only ~4 steps — discrete search too expensive.
+PGD (best prior method at 1e15 FLOPs): **11.33 mean** over 5 samples.
+- s0=11.33, s1=11.58, s2=11.00, s3=11.07, s4=11.68 → uniform, all hard for PGD.
 
-## v1 — PGD + LSGM(0.85) + stripped auxiliary losses ✓ BEST
+## v1 — PGD + LSGM(0.85) + stripped aux losses ★ BEST SO FAR
 
-**Issue:** [#15](https://github.com/rubicante/claudini/issues/15)
-**Results:** s0=11.76, s1=7.10, s2=6.73 → **mean=8.53** (+2.80 vs PGD)
+**Issue:** [#15](https://github.com/rubicante/claudini/issues/15) + [#20](https://github.com/rubicante/claudini/issues/20)
+**Results (5 samples):** s0=11.76, s1=7.10, s2=6.73, s3=10.56, s4=10.11 → **mean=9.25**
+**vs PGD:** +2.08 improvement.
 
-LSGM + stripped aux losses dramatically helps samples 1&2 but NOT sample 0.
-Note: v1 is actually WORSE than PGD on sample 0 (11.76 vs 11.33).
-Patience mechanism never fires — relaxed loss always improves.
+Bimodal: samples 1,2 break well (6-7); samples 0,3,4 mediocre (10-12).
+LSGM is essential (v5 ablation shows stripping LSGM → 12.83, WORSE than PGD).
 
-## v2 — LSGM(0.75) + noisy patience escape (scale=1.5)
+## v2 — LSGM(0.75) + noisy patience kick (scale=1.5)
 
-**Issue:** [#16](https://github.com/rubicante/claudini/issues/16)
-**Results:** s0=11.51, s1=8.40, s2=6.63 → mean=8.85 (worse than v1)
-gamma=0.75 disrupted sample 1's trajectory. Large noise scale too disruptive.
+**Issue:** [#16](https://github.com/rubicante/claudini/issues/16) | mean=8.85 (3 samples) — worse than v1
+gamma=0.75 disrupted convergence for easy samples.
 
-## v3 — LSGM(0.85) + gentle noise kick (scale=0.5) — identical to v1 in practice
+## v3 — LSGM(0.85) + patience kick (scale=0.5)
 
-**Issue:** [#17](https://github.com/rubicante/claudini/issues/17)
-**Results:** s0=12.05, s1=7.10, s2=9.11 → mean=9.42 (worse than v1)
-Patience never fires → noise kicks never triggered. Variance = GPU non-determinism.
-3 samples insufficient for reliable comparison — results vary per GPU run.
+**Issue:** [#17](https://github.com/rubicante/claudini/issues/17) | mean=9.42 (3 samples)
+Patience NEVER fires (relaxed loss always improves). v3 = v1 + GPU non-determinism.
 
 ## v4 — K=2 restarts + LSGM(0.85)
 
-**Issue:** [#18](https://github.com/rubicante/claudini/issues/18)
-**Results:** s0=11.30, s1=10.23, s2=11.02 → mean=10.85 (much worse than v1)
-K=2 gives only ~295 steps per restart. Breakthrough for s1&s2 happens at step 400-590.
-With 295 steps, breakthroughs don't happen. More steps > more restarts at this budget.
+**Issue:** [#18](https://github.com/rubicante/claudini/issues/18) | mean=10.85 (3 samples)
+K=2 → ~295 steps/restart. Breakthroughs happen at 400-590 steps. Too few steps.
 
-## v5 — Stripped losses only, NO LSGM — ablation
+## v5 — Stripped losses only, NO LSGM (ablation)
 
-**Key question**: Does LSGM help or hurt sample 0?
-v1 LSGM makes s0=11.76 (vs PGD=11.33 without LSGM). Is LSGM hurting s0?
+**Issue:** [#19](https://github.com/rubicante/claudini/issues/19) | mean=12.83 → LSGM is essential.
+Without LSGM, stripping aux losses makes things WORSE than PGD.
+
+## v6 — LSGM(0.85) + longer cosine LR cycles (T_0=120, T_mult=2)
+
+**Issue:** [#21](https://github.com/rubicante/claudini/issues/21) | mean=9.98 (5 samples)
+s0=9.49 (better), s1=8.80 (worse), s2=10.06 (worse), s3=11.43, s4=10.10
+Longer cycles help hard samples but disrupt easy samples' convergence.
+
+## v7 — Layer-selective LSGM (upper 50% of layers only)
+
+**Key ideas:**
+1. Apply LSGM only to layers 14-27 (upper half of Qwen2.5-7B's 28 layers)
+2. Hypothesis: later layers handle semantic token decisions more directly
+3. Concentrating LSGM on later layers may give a different tradeoff between
+   exploration (early) and gradient smoothing (late)
 
 **Issue:** (pending)
 **Results:** (pending)
 
-## What to try next (v6)
+## What to try next (v8)
 
-Ablation results will determine:
-- If v5 > v1: LSGM hurts sample 0 → adaptive LSGM (activate only after step 200)
-- If v5 ≈ v1 (same 1&2, better 0): LSGM helps 1&2 but hurts 0 → try two-phase approach
-- If v5 < v1: LSGM is responsible for most of the gain → focus on tuning gamma
-
-Key insight: Need 5 samples for reliable estimates. GPU non-determinism with 3 samples
-makes comparisons unreliable (v3 showed this clearly).
+- If v7 improves over v1: tune layer_fraction (0.3, 0.7)
+- If v7 < v1: try LSGM only on attention norms (not FFN norms) → different smoothing
+- Alternative direction: use higher gamma (0.90) for less aggressive smoothing
+- Key insight: need to help samples 0, 3, 4 without hurting 1, 2
